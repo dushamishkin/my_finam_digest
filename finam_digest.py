@@ -154,25 +154,25 @@ def build_prompt(articles: list[dict], weekly: bool) -> str:
 - Не копируй текст дословно — излагай суть своими словами
 - Для каждого раздела выдели 2-4 самые важные идеи
 - В конце — 3-5 ключевых вывода
-- Формат: Telegram Markdown (жирный **текст**, курсив _текст_, ссылки [текст](url))
+- Формат: Telegram HTML (<b>жирный</b>, <i>курсив</i>, ссылки <a href="url">текст</a>)
 - Объём: {"1500-2500" if weekly else "800-1500"} символов
 
 МАТЕРИАЛЫ:
 {content}
 
 СТРУКТУРА ДАЙДЖЕСТА:
-{"📅 *ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ FINAM*" if weekly else "🌅 *ЕЖЕДНЕВНЫЙ ДАЙДЖЕСТ FINAM*"} — {datetime.now(MOSCOW_TZ).strftime('%d.%m.%Y')}
+{"📅 <b>ЕЖЕНЕДЕЛЬНЫЙ ДАЙДЖЕСТ FINAM</b>" if weekly else "🌅 <b>ЕЖЕДНЕВНЫЙ ДАЙДЖЕСТ FINAM</b>"} — {datetime.now(MOSCOW_TZ).strftime('%d.%m.%Y')}
 
-📰 *Новости компаний и экономики*
+📰 <b>Новости компаний и экономики</b>
 ...
 
-📊 *Аналитика и комментарии*
+📊 <b>Аналитика и комментарии</b>
 ...
 
-🔮 *Прогнозы и сценарии*
+🔮 <b>Прогнозы и сценарии</b>
 ...
 
-💡 *Ключевые выводы*
+💡 <b>Ключевые выводы</b>
 ...
 """
 
@@ -214,13 +214,15 @@ def send_telegram(text: str):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
 
+    print(f"[INFO] Отправляем в Telegram ({len(text)} символов)")
+
     # Telegram ограничивает сообщение 4096 символами — режем при необходимости
     chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
     for chunk in chunks:
         payload = json.dumps({
             "chat_id": chat_id,
             "text": chunk,
-            "parse_mode": "Markdown",
+            "parse_mode": "HTML",
             "disable_web_page_preview": True,
         }).encode()
         req = urllib.request.Request(
