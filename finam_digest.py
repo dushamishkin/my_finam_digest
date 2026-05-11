@@ -210,6 +210,20 @@ def generate_digest(articles: list[dict], weekly: bool) -> str:
                 raise
     raise RuntimeError("Gemini API: исчерпаны попытки")
 
+def _telegram_request(token: str, payload: dict) -> dict:
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        data=data,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Telegram HTTP {e.code}: {body[:300]}") from e
+
 def send_telegram(text: str):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
@@ -219,21 +233,14 @@ def send_telegram(text: str):
     # Telegram ограничивает сообщение 4096 символами — режем при необходимости
     chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
     for chunk in chunks:
-        payload = json.dumps({
-            "chat_id": chat_id,
-            "text": chunk,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True,
-        }).encode()
-        req = urllib.request.Request(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-            if not result.get("ok"):
-                raise RuntimeError(f"Telegram error: {result}")
+        base = {"chat_id": chat_id, "text": chunk, "disable_web_page_preview": True}
+        try:
+            result = _telegram_request(token, {**base, "parse_mode": "HTML"})
+        except RuntimeError as e:
+            print(f"[WARN] Telegram HTML rejected ({e}), отправляем plain text")
+            result = _telegram_request(token, base)
+        if not result.get("ok"):
+            raise RuntimeError(f"Telegram error: {result}")
 
 # ─── Точка входа ─────────────────────────────────────────────────────────────
 
