@@ -177,6 +177,7 @@ def build_prompt(articles: list[dict], weekly: bool) -> str:
 """
 
 def generate_digest(articles: list[dict], weekly: bool) -> str:
+    import time
     api_key = os.environ["GEMINI_API_KEY"]
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -186,12 +187,23 @@ def generate_digest(articles: list[dict], weekly: bool) -> str:
         "contents": [{"parts": [{"text": build_prompt(articles, weekly)}]}],
         "generationConfig": {"maxOutputTokens": 2000, "temperature": 0.4},
     }).encode()
-    req = urllib.request.Request(
-        url, data=payload, headers={"Content-Type": "application/json"}
-    )
-    with urllib.request.urlopen(req) as resp:
-        result = json.loads(resp.read())
-    return result["candidates"][0]["content"]["parts"][0]["text"]
+
+    for attempt in range(4):
+        req = urllib.request.Request(
+            url, data=payload, headers={"Content-Type": "application/json"}
+        )
+        try:
+            with urllib.request.urlopen(req) as resp:
+                result = json.loads(resp.read())
+            return result["candidates"][0]["content"]["parts"][0]["text"]
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < 3:
+                wait = 15 * (attempt + 1)
+                print(f"[WARN] Gemini 429, повтор через {wait}с (попытка {attempt + 1}/3)")
+                time.sleep(wait)
+            else:
+                raise
+    raise RuntimeError("Gemini API: исчерпаны попытки")
 
 def send_telegram(text: str):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
