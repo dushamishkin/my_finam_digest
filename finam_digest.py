@@ -181,7 +181,7 @@ def generate_digest(articles: list[dict], weekly: bool) -> str:
     api_key = os.environ["GEMINI_API_KEY"]
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.0-flash:generateContent?key={api_key}"
+        f"gemini-2.5-flash:generateContent?key={api_key}"
     )
     payload = json.dumps({
         "contents": [{"parts": [{"text": build_prompt(articles, weekly)}]}],
