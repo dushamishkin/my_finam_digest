@@ -42,7 +42,7 @@ jobs:
           python-version: '3.12'
 
       - name: 📦 Установить зависимости
-        run: pip install feedparser anthropic
+        run: pip install feedparser
 
       - name: 🗞️ Определить режим запуска
         id: mode
@@ -58,6 +58,6 @@ jobs:
       - name: 📨 Запустить скрипт дайджеста
         run: python finam_digest.py ${{ steps.mode.outputs.mode }}
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
