@@ -16,9 +16,9 @@ from datetime import datetime, timezone, timedelta
 # ─── Настройки ────────────────────────────────────────────────────────────────
 
 FEEDS = {
-    "Новости компаний и экономики": "https://www.finam.ru/rsspoint/rss/?cat=companies",
-    "Аналитика и комментарии":     "https://www.finam.ru/rsspoint/rss/?cat=market",
-    "Прогнозы и сценарии":         "https://www.finam.ru/rsspoint/rss/?cat=forecasts",
+    "Новости компаний и экономики": "https://www.finam.ru/analysis/conews/rsspoint/",
+    "Аналитика и комментарии":      "https://www.finam.ru/analysis/nslent/rsspoint/",
+    "Прогнозы и сценарии":          "https://www.finam.ru/analysis/forecasts/rsspoint/",
 }
 
 MOSCOW_TZ = timezone(timedelta(hours=3))
@@ -40,17 +40,72 @@ def save_seen(seen: set):
 def article_id(entry) -> str:
     return hashlib.md5((entry.get("id") or entry.get("link", "")).encode()).hexdigest()
 
+def fetch_feeds_xml(urls: list[str]) -> dict[str, bytes]:
+    """Fetch RSS feeds using playwright to bypass DDoSGuard bot protection."""
+    from playwright.sync_api import sync_playwright
+
+    results = {}
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+        )
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            )
+        )
+
+        for url in urls:
+            captured: list[bytes] = []
+
+            def handle_response(resp, _url=url, _captured=captured):
+                ct = resp.headers.get("content-type", "").lower()
+                if ("xml" in ct or "rss" in ct) and resp.status == 200:
+                    try:
+                        _captured.append(resp.body())
+                    except Exception:
+                        pass
+
+            page = context.new_page()
+            page.on("response", handle_response)
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                page.wait_for_timeout(3000)
+                if captured:
+                    results[url] = captured[-1]
+                    print(f"[INFO] Лента загружена: {url} ({len(captured[-1])} байт)")
+                else:
+                    print(f"[WARN] XML не получен для {url}")
+            except Exception as e:
+                print(f"[WARN] Ошибка загрузки {url}: {e}")
+            finally:
+                page.close()
+
+        browser.close()
+
+    return results
+
 def fetch_articles(seen: set, weekly: bool = False) -> list[dict]:
     """Собирает статьи из RSS. При weekly=True берёт за 7 дней, иначе за 1 день."""
     articles = []
     cutoff_hours = 168 if weekly else 26   # 7 дней или ~1 день
     now = datetime.now(MOSCOW_TZ)
 
+    feed_urls = list(FEEDS.values())
+    xml_by_url = fetch_feeds_xml(feed_urls)
+
     for section, url in FEEDS.items():
-        try:
-            feed = feedparser.parse(url)
-        except Exception as e:
-            print(f"[WARN] Не удалось получить ленту {section}: {e}")
+        xml = xml_by_url.get(url)
+        if not xml:
+            print(f"[WARN] Пропускаем раздел '{section}' — лента недоступна")
+            continue
+
+        feed = feedparser.parse(xml)
+        if not feed.entries:
+            print(f"[WARN] Нет записей в ленте '{section}'")
             continue
 
         for entry in feed.entries[:MAX_ITEMS_PER_FEED]:
@@ -65,11 +120,12 @@ def fetch_articles(seen: set, weekly: bool = False) -> list[dict]:
             pub_dt = None
             if pub:
                 try:
+                    # published_parsed уже в UTC (feedparser конвертирует из +0300)
                     pub_dt = datetime(*pub[:6], tzinfo=timezone.utc).astimezone(MOSCOW_TZ)
                     if (now - pub_dt).total_seconds() > cutoff_hours * 3600:
                         continue
                 except Exception:
-                    pass  # дата есть, но не парсится — включаем статью
+                    pass  # дата не парсится — включаем статью
 
             articles.append({
                 "id":      aid,

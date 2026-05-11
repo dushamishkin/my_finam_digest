@@ -42,7 +42,10 @@ jobs:
           python-version: '3.12'
 
       - name: 📦 Установить зависимости
-        run: pip install feedparser
+        run: pip install -r requirements.txt
+
+      - name: 🌐 Установить Chromium для playwright
+        run: playwright install chromium --with-deps
 
       - name: 🗞️ Определить режим запуска
         id: mode
