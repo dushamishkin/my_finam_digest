@@ -62,10 +62,14 @@ def fetch_articles(seen: set, weekly: bool = False) -> list[dict]:
 
             # Фильтр по времени
             pub = entry.get("published_parsed")
+            pub_dt = None
             if pub:
-                pub_dt = datetime(*pub[:6], tzinfo=timezone.utc).astimezone(MOSCOW_TZ)
-                if (now - pub_dt).total_seconds() > cutoff_hours * 3600:
-                    continue
+                try:
+                    pub_dt = datetime(*pub[:6], tzinfo=timezone.utc).astimezone(MOSCOW_TZ)
+                    if (now - pub_dt).total_seconds() > cutoff_hours * 3600:
+                        continue
+                except Exception:
+                    pass  # дата есть, но не парсится — включаем статью
 
             articles.append({
                 "id":      aid,
@@ -73,7 +77,7 @@ def fetch_articles(seen: set, weekly: bool = False) -> list[dict]:
                 "title":   entry.get("title", "").strip(),
                 "summary": entry.get("summary", "")[:600].strip(),
                 "link":    entry.get("link", ""),
-                "pub":     pub_dt.strftime("%d.%m %H:%M") if pub else "",
+                "pub":     pub_dt.strftime("%d.%m %H:%M") if pub_dt else "—",
             })
 
     return articles
