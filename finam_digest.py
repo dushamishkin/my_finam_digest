@@ -198,10 +198,15 @@ def generate_digest(articles: list[dict], weekly: bool) -> str:
             return result["candidates"][0]["content"]["parts"][0]["text"]
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < 3:
-                wait = 15 * (attempt + 1)
-                print(f"[WARN] Gemini 429, повтор через {wait}с (попытка {attempt + 1}/3)")
+                # Respect Retry-After header if present, otherwise exponential backoff
+                retry_after = e.headers.get("Retry-After") or e.headers.get("retry-after")
+                wait = int(retry_after) if retry_after else 60 * (attempt + 1)
+                body = e.read().decode("utf-8", errors="replace")
+                print(f"[WARN] Gemini 429 (попытка {attempt + 1}/3), ждём {wait}с. Ответ: {body[:200]}")
                 time.sleep(wait)
             else:
+                body = e.read().decode("utf-8", errors="replace")
+                print(f"[ERROR] Gemini HTTP {e.code}: {body[:500]}")
                 raise
     raise RuntimeError("Gemini API: исчерпаны попытки")
 
