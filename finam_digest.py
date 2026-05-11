@@ -9,7 +9,6 @@ import sys
 import json
 import hashlib
 import feedparser
-import anthropic
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone, timedelta
@@ -118,13 +117,21 @@ def build_prompt(articles: list[dict], weekly: bool) -> str:
 """
 
 def generate_digest(articles: list[dict], weekly: bool) -> str:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": build_prompt(articles, weekly)}]
+    api_key = os.environ["GEMINI_API_KEY"]
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-2.0-flash:generateContent?key={api_key}"
     )
-    return response.content[0].text
+    payload = json.dumps({
+        "contents": [{"parts": [{"text": build_prompt(articles, weekly)}]}],
+        "generationConfig": {"maxOutputTokens": 2000, "temperature": 0.4},
+    }).encode()
+    req = urllib.request.Request(
+        url, data=payload, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req) as resp:
+        result = json.loads(resp.read())
+    return result["candidates"][0]["content"]["parts"][0]["text"]
 
 def send_telegram(text: str):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
