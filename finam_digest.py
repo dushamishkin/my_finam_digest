@@ -185,7 +185,11 @@ def generate_digest(articles: list[dict], weekly: bool) -> str:
     )
     payload = json.dumps({
         "contents": [{"parts": [{"text": build_prompt(articles, weekly)}]}],
-        "generationConfig": {"maxOutputTokens": 2000, "temperature": 0.4},
+        "generationConfig": {
+            "maxOutputTokens": 8192,
+            "temperature": 0.4,
+        },
+        "thinkingConfig": {"thinkingBudget": 0},
     }).encode()
 
     for attempt in range(4):
