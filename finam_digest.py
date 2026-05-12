@@ -188,8 +188,8 @@ def generate_digest(articles: list[dict], weekly: bool) -> str:
         "generationConfig": {
             "maxOutputTokens": 8192,
             "temperature": 0.4,
+            "thinkingConfig": {"thinkingBudget": 0},
         },
-        "thinkingConfig": {"thinkingBudget": 0},
     }).encode()
 
     for attempt in range(4):
